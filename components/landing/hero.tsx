@@ -1,9 +1,17 @@
+"use client";
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Activity, ArrowRight } from "lucide-react"
+import VoiceComponent from "@/components/voice-component";
+import { Mic } from "lucide-react";
+import { useState } from "react";
+
+
 
 export function HeroSection() {
+  const [voiceOpen, setVoiceOpen] = useState(false)
   return (
+    <>
     <section className="relative overflow-hidden bg-background py-20 sm:py-28 lg:py-36">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary/5 via-transparent to-transparent" />
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -41,5 +49,24 @@ export function HeroSection() {
         </div>
       </div>
     </section>
+      {/* Voice Widget (bottom-right) */}
+      <div className="fixed bottom-4 right-4 z-50 flex items-end">
+        <div className="flex flex-col items-end">
+          {voiceOpen && (
+            <div className="mb-3">
+              <VoiceComponent />
+            </div>
+          )}
+
+          <button
+            aria-label={voiceOpen ? "Close voice widget" : "Open voice widget"}
+            onClick={() => setVoiceOpen(!voiceOpen)}
+            className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white shadow-md hover:scale-95 focus:outline-none"
+          >
+            <Mic className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+    </>
   )
 }
