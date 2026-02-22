@@ -28,13 +28,26 @@ export function LandingHeader() {
           >
             Technology
           </Link>
+          <Link
+            href="/summarize"
+            className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Summarizer
+          </Link>
           <Link href="/dashboard" className="ml-2">
             <Button size="sm">View Dashboard</Button>
           </Link>
         </nav>
-        <Link href="/dashboard" className="md:hidden">
-          <Button size="sm">Dashboard</Button>
-        </Link>
+        <div className="flex items-center gap-2 md:hidden">
+          <Link href="/summarize">
+            <Button size="sm" variant="outline">
+              Summarizer
+            </Button>
+          </Link>
+          <Link href="/dashboard">
+            <Button size="sm">Dashboard</Button>
+          </Link>
+        </div>
       </div>
     </header>
   )

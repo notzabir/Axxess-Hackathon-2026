@@ -11,12 +11,74 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Mic, MicOff, Volume2, VolumeX, ArrowRight, Phone } from "lucide-react";
 
+type ChatMessage = {
+  id: string
+  from: "user" | "agent"
+  text: string
+}
+
+const createMessageId = () => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID()
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+const extractTextFromUnknown = (value: unknown): string => {
+  if (typeof value === "string") return value.trim()
+  if (typeof value === "number" || typeof value === "boolean") return String(value)
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => extractTextFromUnknown(item))
+      .filter(Boolean)
+      .join(" ")
+      .trim()
+  }
+
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>
+    const directText = record.text ?? record.transcript ?? record.delta ?? record.message ?? record.content
+    if (directText !== undefined) {
+      return extractTextFromUnknown(directText)
+    }
+  }
+
+  return ""
+}
+
+const normalizeIncomingAgentMessage = (message: unknown) => {
+  if (!message || typeof message !== "object") return null
+
+  const record = message as Record<string, unknown>
+  const role = typeof record.role === "string" ? record.role.toLowerCase() : ""
+  const type = typeof record.type === "string" ? record.type.toLowerCase() : ""
+
+  if (role.includes("user") || type.includes("user")) {
+    return null
+  }
+
+  const text = extractTextFromUnknown(
+    record.text ?? record.content ?? record.message ?? record.delta ?? record.transcript
+  )
+
+  if (!text) {
+    return null
+  }
+
+  const sourceId = typeof record.id === "string" ? `agent-${record.id}` : createMessageId()
+  const isChunk = type.includes("delta") || type.includes("partial") || type.includes("chunk")
+
+  return { id: sourceId, text, isChunk }
+}
+
 const VoiceChat = () => {
   const [hasPermission, setHasPermission] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [modeView, setModeView] = useState<"voice" | "text">("voice")
-  const [messages, setMessages] = useState<Array<{ id: string; from: "user" | "agent"; text: string }>>([])
+  const [messages, setMessages] = useState<ChatMessage[]>([])
   const [textInput, setTextInput] = useState("")
 
   const conversation = useConversation({
@@ -28,9 +90,24 @@ const VoiceChat = () => {
     },
     onMessage: (message: any) => {
       console.log("Received message:", message);
-      // Try to extract a useful text field, fallback to JSON
-      const text = (message && (message.text || message.content || message.message)) || JSON.stringify(message)
-      setMessages((prev) => [...prev, { id: message?.id || Date.now().toString(), from: "agent", text }])
+      const normalized = normalizeIncomingAgentMessage(message)
+
+      if (!normalized) return
+
+      setMessages((prev) => {
+        if (normalized.isChunk && prev.length > 0) {
+          const last = prev[prev.length - 1]
+          if (last.from === "agent") {
+            const needsSpace =
+              last.text.length > 0 && !/\s$/.test(last.text) && !/^[,.;!?)]/.test(normalized.text)
+            const mergedText = `${last.text}${needsSpace ? " " : ""}${normalized.text}`
+
+            return [...prev.slice(0, -1), { ...last, text: mergedText }]
+          }
+        }
+
+        return [...prev, { id: normalized.id, from: "agent", text: normalized.text }]
+      })
     },
     onError: (error: string | Error) => {
       setErrorMessage(typeof error === "string" ? error : error.message);
@@ -89,7 +166,9 @@ const VoiceChat = () => {
   };
 
   const sendTextMessage = async (text: string) => {
-    if (!text?.trim()) return
+    const sanitizedText = text.trim()
+    if (!sanitizedText) return
+
     try {
       // Ensure session is started
       if (status !== "connected") {
@@ -100,13 +179,13 @@ const VoiceChat = () => {
       }
 
       // Append user message locally
-      const id = Date.now().toString()
-      setMessages((prev) => [...prev, { id, from: "user", text }])
+      const id = createMessageId()
+      setMessages((prev) => [...prev, { id, from: "user", text: sanitizedText }])
 
       // Send to the conversation hook (library exposes sendUserMessage)
       // @ts-ignore - third-party hook types may not expose full methods here
       if (typeof (conversation as any).sendUserMessage === "function") {
-        ;(conversation as any).sendUserMessage(text)
+        ;(conversation as any).sendUserMessage(sanitizedText)
       } else {
         console.warn("sendUserMessage not available on conversation")
       }
@@ -221,7 +300,7 @@ const VoiceChat = () => {
                     {messages.length === 0 && <p className="text-sm text-muted-foreground">No messages yet.</p>}
                     {messages.map((m) => (
                       <div key={m.id} className={`text-sm ${m.from === "user" ? "text-right" : "text-left"}`}>
-                        <div className={`${m.from === "user" ? "inline-block bg-primary/80 text-white" : "inline-block bg-card/70 text-foreground"} rounded px-3 py-2`}>{m.text}</div>
+                        <div className={`${m.from === "user" ? "inline-block bg-primary/80 text-white" : "inline-block bg-card/70 text-foreground"} whitespace-pre-wrap rounded px-3 py-2`}>{m.text}</div>
                       </div>
                     ))}
                   </div>
