@@ -39,6 +39,7 @@ export async function POST(req: NextRequest) {
           content: `You are a Diagnostic Assistant. Summarize the following clinical data:
           - Extract vitals and symptoms.
           - Map to suggested ICD-10 codes.
+          - Suggest treatments and recommend medications based on those ICD-10 codes.
           - Provide a patient-friendly summary.
           Use clean Markdown formatting.`
         },
